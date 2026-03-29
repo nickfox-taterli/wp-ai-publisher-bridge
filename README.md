@@ -4,7 +4,9 @@
 
 丢一台服务器,配好 AI 模型的 key,然后就不用管了--它会自己找话题,自己写文章,自己发到 WordPress 上.没人盯也没事,睡醒一看站就更新了.
 
-## 这玩意儿是啥
+测试站: https://ai-publisher-bridge.taterli.cyou/ (无评论功能)
+
+## 是咩也
 
 两部分组成:
 
@@ -15,7 +17,7 @@ Worker 跑起来之后,它会:
 1. 自己想写啥(用 AI 选话题)
 2. 自己写(调大模型生成内容)
 3. 自己发(通过 REST API 推到 WordPress)
-4. 循环往复,永不停歇
+4. 自己写cron挂着
 
 未来也支持pull模式,就是你在WordPress后台手动建任务,worker去拉下来执行.
 
@@ -88,17 +90,16 @@ cd /opt/linux-sources
 ## 注意事项 & 风险
 
 - **这是全自动的**,没人看着就会一直发,注意别把站发满了
-- **AI 生成的内容质量看模型**,MiniMax 表现还行,其他模型不确定
+- **AI 生成的内容质量看模型**,MiniMax 表现还行,其他模型不确定,不用选那些思考很强的,只要那些模型看起来够自然就行
 - **Token 会花钱**,全自动意味着持续消耗 API token,注意账单
 - **默认 token 是硬编码的**,`config.py` 里的 `APB_TOKEN` 是默认值,正式用的话建议改掉或者通过环境变量 `APB_TOKEN` 传入
 - **删插件会删表**,uninstall 会把 `apb_jobs` 表和配置项都删了,任务数据就没了
-- WordPress 端和 Worker 之间的通讯没有 HTTPS(默认 localhost),如果要远程部署记得自己加一层
 
 ## 环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `APB_BASE` | WordPress REST API 地址 | `http://127.0.0.1:10087/wp-json/apb/v1` |
+| `APB_BASE` | WordPress REST API 地址 | `http://127.0.0.1/wp-json/apb/v1` |
 | `APB_TOKEN` | 通讯认证 token | 硬编码在 config.py 里 |
 | `HTTPS_PROXY` / `HTTP_PROXY` | 代理地址,worker 调 AI API 时走这个 | 无 |
 | `NO_PROXY` | 不走代理的地址 | `localhost,127.0.0.1` |

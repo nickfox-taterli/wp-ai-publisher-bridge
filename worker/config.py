@@ -6,7 +6,7 @@ import httpx
 import requests
 from openai import OpenAI
 
-APB_BASE = os.environ.get("APB_BASE", "http://127.0.0.1:10087/wp-json/apb/v1")
+APB_BASE = os.environ.get("APB_BASE", "http://127.0.0.1/wp-json/apb/v1")
 APB_TOKEN = os.environ.get("APB_TOKEN", "xXD95mbcE66viakl5lVv73ejcM3IQ1hd")
 
 HEADERS = {"X-APB-Token": APB_TOKEN, "Content-Type": "application/json"}
