@@ -1,0 +1,78 @@
+"""WordPress REST API 客户端"""
+
+from config import APB_BASE, APB_SESSION
+
+
+def apb_get(path: str, params: dict | None = None):
+    r = APB_SESSION.get(f"{APB_BASE}{path}", params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+def apb_post(path: str, body: dict | None = None):
+    r = APB_SESSION.post(
+        f"{APB_BASE}{path}",
+        json=body,
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def fetch_categories() -> list[dict]:
+    resp = apb_get("/categories")
+    return resp.get("data", [])
+
+
+def fetch_config() -> dict:
+    resp = apb_get("/config")
+    return resp.get("data", {})
+
+
+def fetch_pending_jobs(limit: int = 5) -> list[dict]:
+    resp = apb_get("/jobs", {"status": "pending", "limit": limit})
+    return resp.get("data", [])
+
+
+def claim_job(job_id: str) -> dict:
+    return apb_post(f"/jobs/{job_id}/claim")
+
+
+def complete_job(job_id: str, title: str, html_content: str, excerpt: str = "",
+                 post_slug: str = "", category_id: int | None = None,
+                 post_date: str | None = None):
+    body = {
+        "generated_title": title,
+        "generated_html": html_content,
+        "generated_excerpt": excerpt,
+        "generated_json": "",
+    }
+    if post_slug:
+        body["post_slug"] = post_slug
+    if category_id:
+        body["category_id"] = category_id
+    if post_date:
+        body["post_date"] = post_date
+    return apb_post(f"/jobs/{job_id}/complete", body)
+
+
+def fail_job(job_id: str, error: str):
+    return apb_post(f"/jobs/{job_id}/fail", {"error_message": error})
+
+
+def create_job(topic: str, keywords: str = "", site_profile: str = "",
+               category_id: int | None = None) -> dict:
+    body = {"topic": topic, "keywords": keywords, "site_profile": site_profile}
+    if category_id:
+        body["category_id"] = category_id
+    return apb_post("/jobs", body)
+
+
+def fetch_published_jobs(limit: int = 100) -> list[dict]:
+    resp = apb_get("/jobs", {"status": "published", "limit": limit})
+    return resp.get("data", [])
+
+
+def fetch_completed_jobs(limit: int = 100) -> list[dict]:
+    resp = apb_get("/jobs", {"status": "completed", "limit": limit})
+    return resp.get("data", [])
