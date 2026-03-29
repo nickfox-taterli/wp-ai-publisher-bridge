@@ -378,6 +378,9 @@ def autonomous_run(count: int = 1):
     except Exception as e:
         print(f"获取配置失败: {e}")
         cfg = {}
+    if _config.ai_client is None:
+        print("AI 客户端未初始化,终止运行. 请检查 /config 接口返回的 AI 配置.")
+        return
 
     params = _read_cfg_params(cfg)
 
@@ -564,6 +567,9 @@ def pull_and_process():
     except Exception as e:
         print(f"获取配置失败: {e}")
         cfg = {}
+    if _config.ai_client is None:
+        print("AI 客户端未初始化,终止运行. 请检查 /config 接口返回的 AI 配置.")
+        return
 
     try:
         categories = fetch_categories()

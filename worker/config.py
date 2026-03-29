@@ -26,10 +26,13 @@ AI_MODEL: str = ""
 def init_ai_client(config: dict):
     global ai_client, AI_MODEL
     AI_MODEL = config.get("ai_model", "")
+    explicit_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+    http_client_kwargs = {"trust_env": False}
+    if explicit_proxy:
+        http_client_kwargs["proxy"] = explicit_proxy
+
     ai_client = OpenAI(
         api_key=config.get("ai_api_key", ""),
         base_url=config.get("ai_base_url", ""),
-        http_client=httpx.Client(
-            proxy=os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY"),
-        ),
+        http_client=httpx.Client(**http_client_kwargs),
     )

@@ -1,12 +1,24 @@
 """WordPress REST API 客户端"""
 
+import json
+
 from config import APB_BASE, APB_SESSION
+
+
+def _json_with_bom_fallback(response):
+    """优先常规 JSON 解析,失败时兼容 UTF-8 BOM."""
+    try:
+        return response.json()
+    except ValueError:
+        raw = response.content.decode("utf-8", errors="replace")
+        raw = raw.lstrip("\ufeff\r\n\t ")
+        return json.loads(raw)
 
 
 def apb_get(path: str, params: dict | None = None):
     r = APB_SESSION.get(f"{APB_BASE}{path}", params=params, timeout=30)
     r.raise_for_status()
-    return r.json()
+    return _json_with_bom_fallback(r)
 
 
 def apb_post(path: str, body: dict | None = None):
@@ -16,7 +28,7 @@ def apb_post(path: str, body: dict | None = None):
         timeout=30,
     )
     r.raise_for_status()
-    return r.json()
+    return _json_with_bom_fallback(r)
 
 
 def fetch_categories() -> list[dict]:
