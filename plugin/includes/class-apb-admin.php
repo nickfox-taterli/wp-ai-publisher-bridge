@@ -229,7 +229,7 @@ class APB_Admin {
                 continue;
             }
 
-            $prompt_text = sanitize_textarea_field( $prompts[ $term_id ] ?? '' );
+            $prompt_text = sanitize_textarea_field( wp_unslash( $prompts[ $term_id ] ?? '' ) );
             if ( ! empty( $prompt_text ) ) {
                 update_term_meta( $term_id, 'apb_prompt_append', $prompt_text );
             } else {
@@ -257,7 +257,7 @@ class APB_Admin {
                 delete_term_meta( $term_id, 'apb_source_path' );
             }
 
-            $sys_text = sanitize_textarea_field( $sys_prompts[ $term_id ] ?? '' );
+            $sys_text = sanitize_textarea_field( wp_unslash( $sys_prompts[ $term_id ] ?? '' ) );
             if ( ! empty( $sys_text ) ) {
                 update_term_meta( $term_id, 'apb_system_prompt', $sys_text );
             } else {
@@ -271,7 +271,7 @@ class APB_Admin {
                 delete_term_meta( $term_id, 'apb_generator' );
             }
 
-            $sm_text = sanitize_textarea_field( $source_maps[ $term_id ] ?? '' );
+            $sm_text = sanitize_textarea_field( wp_unslash( $source_maps[ $term_id ] ?? '' ) );
             if ( ! empty( $sm_text ) ) {
                 // 校验 JSON 格式
                 $decoded = json_decode( $sm_text, true );

@@ -162,6 +162,7 @@ class APB_REST {
             'typo_injection'              => (bool) ( $settings['typo_injection'] ?? false ),
             'typo_density'                => (float) ( $settings['typo_density'] ?? 0.8 ),
             'max_article_words'           => (int) ( $settings['max_article_words'] ?? 2500 ),
+            'category_balance_threshold'  => (float) ( $settings['category_balance_threshold'] ?? 0.6 ),
         );
 
         return $this->ok( $safe );

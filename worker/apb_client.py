@@ -88,3 +88,21 @@ def fetch_published_jobs(limit: int = 100) -> list[dict]:
 def fetch_completed_jobs(limit: int = 100) -> list[dict]:
     resp = apb_get("/jobs", {"status": "completed", "limit": limit})
     return resp.get("data", [])
+
+
+def fetch_category_distribution() -> dict[int, int]:
+    """从已发布 + 已完成的任务中统计各分类的文章数量.
+
+    Returns:
+        {category_id: count} 字典.
+    """
+    stats: dict[int, int] = {}
+    for fetch_fn in (fetch_published_jobs, fetch_completed_jobs):
+        try:
+            for job in fetch_fn(limit=100):
+                cat_id = int(job.get("category_id") or 0)
+                if cat_id:
+                    stats[cat_id] = stats.get(cat_id, 0) + 1
+        except Exception:
+            pass
+    return stats

@@ -41,6 +41,7 @@ $half_width_punctuation       = ! empty( $settings['half_width_punctuation'] );
 $typo_injection               = ! empty( $settings['typo_injection'] );
 $typo_density                 = esc_attr( $settings['typo_density'] ?? '0.8' );
 $max_article_words            = esc_attr( $settings['max_article_words'] ?? '2500' );
+$category_balance_threshold   = esc_attr( $settings['category_balance_threshold'] ?? '0.6' );
 
 $users      = get_users( array( 'who' => 'authors', 'orderby' => 'display_name' ) );
 $categories = get_categories( array( 'hide_empty' => false ) );
@@ -294,6 +295,23 @@ $categories = get_categories( array( 'hide_empty' => false ) );
                            class="small-text" />
                     <p class="description">
                         0~1 之间,超过此阈值的标题视为重复(默认 0.55).
+                    </p>
+                </td>
+            </tr>
+
+            <tr>
+                <th scope="row">
+                    <label for="apb_category_balance_threshold">分类均衡阈值</label>
+                </th>
+                <td>
+                    <input type="number"
+                           id="apb_category_balance_threshold"
+                           name="<?php echo esc_attr( APB_OPTION_KEY ); ?>[category_balance_threshold]"
+                           value="<?php echo $category_balance_threshold; ?>"
+                           min="0" max="1" step="0.05"
+                           class="small-text" />
+                    <p class="description">
+                        0~1 之间,当某个分类的文章数占总数比例超过此阈值时,自动选择其他分类(默认 0.6,即 60%).设为 1 或 0 可禁用此功能.
                     </p>
                 </td>
             </tr>

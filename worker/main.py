@@ -17,6 +17,7 @@ from apb_client import (
     create_job,
     fail_job,
     fetch_categories,
+    fetch_category_distribution,
     fetch_completed_jobs,
     fetch_config,
     fetch_pending_jobs,
@@ -182,6 +183,7 @@ def _read_cfg_params(cfg: dict) -> dict:
         "half_width_punctuation": cfg.get("half_width_punctuation", False),
         "typo_injection": cfg.get("typo_injection", False),
         "typo_density": cfg.get("typo_density", 0.8),
+        "category_balance_threshold": cfg.get("category_balance_threshold", 0.6),
     }
 
 
@@ -261,6 +263,57 @@ def _resolve_category(
     return cat_id, category_name, category_prompt, category_system_prompt
 
 
+def balance_category(
+    chosen_cat_id: int | None,
+    categories: list[dict],
+    cat_stats: dict[int, int],
+    threshold: float = 0.6,
+) -> int | None:
+    """检查分类占比,若超过阈值则切换到占比最小的分类.
+
+    Args:
+        chosen_cat_id: AI/任务指定的分类 ID.
+        categories: 可用分类列表.
+        cat_stats: {category_id: count} 已发布文章的分类统计.
+        threshold: 单分类占比上限(默认 0.6, 即 60%).设为 0 或 1 可禁用.
+
+    Returns:
+        平衡后的分类 ID(可能与输入不同).
+    """
+    if not chosen_cat_id or not cat_stats or len(categories) < 2:
+        return chosen_cat_id
+
+    # 阈值为 0 或 >= 1 视为禁用
+    if threshold <= 0 or threshold >= 1:
+        return chosen_cat_id
+
+    total = sum(cat_stats.values())
+    if total == 0:
+        return chosen_cat_id
+
+    chosen_count = cat_stats.get(chosen_cat_id, 0)
+    chosen_ratio = chosen_count / total
+
+    if chosen_ratio < threshold:
+        return chosen_cat_id
+
+    # 占比超过阈值,切换到占比最小的分类
+    old_name = next((c["name"] for c in categories if c["id"] == chosen_cat_id), "?")
+    valid_cats = [c for c in categories if c["id"] != chosen_cat_id]
+    if not valid_cats:
+        return chosen_cat_id
+
+    # 选文章数最少的分类;若相同则随机选一个
+    min_count = min(cat_stats.get(c["id"], 0) for c in valid_cats)
+    candidates = [c for c in valid_cats if cat_stats.get(c["id"], 0) == min_count]
+    chosen = random.choice(candidates)
+
+    print(f"  ⚖ 分类均衡: 「{old_name}」占比 {chosen_ratio:.0%} 超过阈值 {threshold:.0%},"
+          f"切换到「{chosen['name']}」(现有 {min_count} 篇)")
+
+    return chosen["id"]
+
+
 def process_one_job(job: dict, categories: list[dict], cfg: dict):
     job_id = job["id"]
     topic = job["topic"]
@@ -287,6 +340,23 @@ def process_one_job(job: dict, categories: list[dict], cfg: dict):
     )
     if cat_id:
         final_cat_id = cat_id
+
+    # 分类均衡: 检查历史文章分布,避免分类扎堆
+    try:
+        cat_stats = fetch_category_distribution()
+        balanced_id = balance_category(
+            final_cat_id, categories, cat_stats,
+            threshold=params["category_balance_threshold"],
+        )
+        if balanced_id and balanced_id != final_cat_id:
+            final_cat_id = balanced_id
+            cat = next((c for c in categories if c["id"] == final_cat_id), None)
+            if cat:
+                category_name = cat["name"]
+                category_prompt = cat.get("prompt_append") or None
+                category_system_prompt = cat.get("system_prompt") or None
+    except Exception as e:
+        print(f"  ⚠ 分类均衡检查失败(不影响后续流程): {e}")
 
     # 生成文章(含质量重试)
     title = ""
@@ -403,6 +473,20 @@ def autonomous_run(count: int = 1):
     existing_titles = fetch_all_existing_titles()
     print(f"已有文章标题: {len(existing_titles)} 条")
 
+    # 分类均衡: 获取已发布文章的分类分布
+    cat_stats = {}
+    try:
+        cat_stats = fetch_category_distribution()
+        if cat_stats:
+            total_articles = sum(cat_stats.values())
+            print(f"分类分布(共 {total_articles} 篇):")
+            for c in categories:
+                cnt = cat_stats.get(c["id"], 0)
+                ratio = cnt / total_articles * 100 if total_articles else 0
+                print(f"  {c['name']}: {cnt} 篇 ({ratio:.0f}%)")
+    except Exception as e:
+        print(f"  获取分类分布失败(不影响运行): {e}")
+
     published_count = 0
     attempts = 0
     retry_multiplier = cfg.get("retry_multiplier", 30) or 30
@@ -454,6 +538,20 @@ def autonomous_run(count: int = 1):
             topic, keywords, categories,
             suggested_cat_name=suggested_cat_name,
         )
+
+        # 分类均衡: 检查历史分布,避免扎堆
+        if cat_id:
+            balanced_id = balance_category(
+                cat_id, categories, cat_stats,
+                threshold=params["category_balance_threshold"],
+            )
+            if balanced_id and balanced_id != cat_id:
+                cat_id = balanced_id
+                cat = next((c for c in categories if c["id"] == cat_id), None)
+                if cat:
+                    category_name = cat["name"]
+                    category_prompt = cat.get("prompt_append") or None
+                    category_system_prompt = cat.get("system_prompt") or None
 
         title = ""
         html_content = ""
@@ -542,6 +640,9 @@ def autonomous_run(count: int = 1):
             print(f"  发布成功! 状态: {status}, WP ID: {wp_id}")
             existing_titles.append(title)
             published_count += 1
+            # 更新分类分布统计,下次循环使用
+            if cat_id:
+                cat_stats[cat_id] = cat_stats.get(cat_id, 0) + 1
         except requests.HTTPError as e:
             print(f"  提交失败: {e.response.status_code}")
             try:
