@@ -502,6 +502,46 @@ def classify_category(topic: str, keywords: str, categories: list[dict]) -> int 
     if not categories:
         return None
 
+    valid_ids = {int(c["id"]) for c in categories}
+    id_to_name = {int(c["id"]): str(c["name"]).strip() for c in categories}
+
+    def _is_valid(cat_id: int) -> bool:
+        return cat_id in valid_ids
+
+    def _extract_category_id(text: str) -> int | None:
+        txt = (text or "").strip()
+        if not txt:
+            return None
+
+        # 1) 最可靠: 整段就是数字
+        if re.fullmatch(r"\d+", txt):
+            cat_id = int(txt)
+            if _is_valid(cat_id):
+                return cat_id
+
+        # 2) 常见格式: "ID 12" / "分类ID: 12" / "选择 12"
+        id_like = re.findall(r"(?:\bID\b|分类ID|类别ID|分类|类别)?\s*[:：]?\s*(\d{1,8})", txt, flags=re.IGNORECASE)
+        for n in reversed(id_like):
+            cat_id = int(n)
+            if _is_valid(cat_id):
+                return cat_id
+
+        # 3) 若回复了分类名,直接映射回 ID
+        txt_lower = txt.lower()
+        for cid, name in id_to_name.items():
+            name_lower = name.lower()
+            if name_lower and (name_lower == txt_lower or name_lower in txt_lower):
+                return cid
+
+        # 4) 最后兜底: 任意数字里找一个有效 ID (从后往前更接近“最终答案”)
+        all_nums = re.findall(r"\d+", txt)
+        for n in reversed(all_nums):
+            cat_id = int(n)
+            if _is_valid(cat_id):
+                return cat_id
+
+        return None
+
     cat_list = "\n".join(f"  - ID {c['id']}: {c['name']}" for c in categories)
     prompt = (
         f"以下是文章的主题和关键词:\n"
@@ -520,11 +560,11 @@ def classify_category(topic: str, keywords: str, categories: list[dict]) -> int 
         extra_body={"reasoning_split": True},
     )
     text = _extract_response_text(resp)
-    match = re.search(r"\d+", text)
-    if match:
-        cat_id = int(match.group())
-        if any(c["id"] == cat_id for c in categories):
-            return cat_id
+    cat_id = _extract_category_id(text)
+    if cat_id is not None:
+        return cat_id
+
+    print(f"  ⚠ 分类识别失败,模型回复前120字: {(text or '')[:120]}...")
     return None
 
 
