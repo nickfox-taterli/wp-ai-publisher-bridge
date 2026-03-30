@@ -43,6 +43,13 @@ $typo_density                 = esc_attr( $settings['typo_density'] ?? '0.8' );
 $max_article_words            = esc_attr( $settings['max_article_words'] ?? '2500' );
 $category_balance_threshold   = esc_attr( $settings['category_balance_threshold'] ?? '0.6' );
 
+$image_gen_enabled         = ! empty( $settings['image_gen_enabled'] );
+$minimax_api_key           = esc_attr( $settings['minimax_api_key'] ?? '' );
+$image_gen_model           = esc_attr( $settings['image_gen_model'] ?? 'image-01' );
+$image_gen_max_per_article = esc_attr( $settings['image_gen_max_per_article'] ?? '3' );
+$image_gen_prompt_template = esc_textarea( $settings['image_gen_prompt_template'] ?? '' );
+$image_gen_aspect_ratios   = esc_attr( $settings['image_gen_aspect_ratios'] ?? '16:9,4:3,1:1' );
+
 $users      = get_users( array( 'who' => 'authors', 'orderby' => 'display_name' ) );
 $categories = get_categories( array( 'hide_empty' => false ) );
 ?>
@@ -529,6 +536,118 @@ $categories = get_categories( array( 'hide_empty' => false ) );
                     <p class="description">
                         文章最大字数上限.配合"最小文章字数"使用,Worker 会在此范围内随机波动,
                         让每篇文章长度不同(默认 2500).
+                    </p>
+                </td>
+            </tr>
+
+            </table>
+        </div>
+
+        <div class="apb-section">
+            <div class="apb-section-header">
+                <span class="apb-icon">🖼️</span>
+                <h2>图像生成设置</h2>
+            </div>
+            <div class="apb-info-box">
+                <p>启用后 Worker 会在文章生成后自动调用 MiniMaxi 图像生成 API,为文章插入配图.图片会上传到 WordPress 媒体库.</p>
+            </div>
+
+            <table class="form-table" role="presentation">
+
+            <tr>
+                <th scope="row">启用图像生成</th>
+                <td>
+                    <label>
+                        <input type="checkbox"
+                               name="<?php echo esc_attr( APB_OPTION_KEY ); ?>[image_gen_enabled]"
+                               value="1"
+                               <?php checked( $image_gen_enabled ); ?> />
+                        启用自动生成文章配图
+                    </label>
+                    <p class="description">
+                        开启后 Worker 会在每篇文章中自动插入 1~N 张 AI 生成的配图.
+                    </p>
+                </td>
+            </tr>
+
+            <tr>
+                <th scope="row">
+                    <label for="apb_minimax_api_key">MiniMax API Key</label>
+                </th>
+                <td>
+                    <input type="text"
+                           id="apb_minimax_api_key"
+                           name="<?php echo esc_attr( APB_OPTION_KEY ); ?>[minimax_api_key]"
+                           value="<?php echo $minimax_api_key; ?>"
+                           class="regular-text"
+                           autocomplete="off" />
+                    <p class="description">
+                        MiniMaxi 图像生成 API 密钥,可在 <a href="https://platform.minimaxi.com/user-center/basic-information/interface-key" target="_blank">账户管理</a> 中获取.
+                    </p>
+                </td>
+            </tr>
+
+            <tr>
+                <th scope="row">
+                    <label for="apb_image_gen_model">图像模型</label>
+                </th>
+                <td>
+                    <select id="apb_image_gen_model"
+                            name="<?php echo esc_attr( APB_OPTION_KEY ); ?>[image_gen_model]">
+                        <option value="image-01" <?php selected( $image_gen_model, 'image-01' ); ?>>image-01</option>
+                        <option value="image-01-live" <?php selected( $image_gen_model, 'image-01-live' ); ?>>image-01-live</option>
+                    </select>
+                    <p class="description">
+                        MiniMaxi 图像生成模型.<code>image-01-live</code> 支持画风设置(漫画、元气等).
+                    </p>
+                </td>
+            </tr>
+
+            <tr>
+                <th scope="row">
+                    <label for="apb_image_gen_max_per_article">每篇最多配图数</label>
+                </th>
+                <td>
+                    <input type="number"
+                           id="apb_image_gen_max_per_article"
+                           name="<?php echo esc_attr( APB_OPTION_KEY ); ?>[image_gen_max_per_article]"
+                           value="<?php echo $image_gen_max_per_article; ?>"
+                           min="1" max="10"
+                           class="small-text" /> 张
+                    <p class="description">
+                        Worker 会随机选择 1~N 张配图插入文章(默认 3,最大 10).
+                    </p>
+                </td>
+            </tr>
+
+            <tr>
+                <th scope="row">
+                    <label for="apb_image_gen_prompt_template">图片 Prompt 模板</label>
+                </th>
+                <td>
+                    <textarea id="apb_image_gen_prompt_template"
+                              name="<?php echo esc_attr( APB_OPTION_KEY ); ?>[image_gen_prompt_template]"
+                              rows="5"
+                              class="large-text code"><?php echo $image_gen_prompt_template; ?></textarea>
+                    <p class="description">
+                        自定义图像 Prompt 生成的系统提示词.留空使用内置默认.此提示词控制 AI 如何根据文章内容生成图片描述.
+                    </p>
+                </td>
+            </tr>
+
+            <tr>
+                <th scope="row">
+                    <label for="apb_image_gen_aspect_ratios">可用宽高比</label>
+                </th>
+                <td>
+                    <input type="text"
+                           id="apb_image_gen_aspect_ratios"
+                           name="<?php echo esc_attr( APB_OPTION_KEY ); ?>[image_gen_aspect_ratios]"
+                           value="<?php echo $image_gen_aspect_ratios; ?>"
+                           class="regular-text"
+                           placeholder="16:9,4:3,1:1" />
+                    <p class="description">
+                        逗号分隔的宽高比列表,AI 会从中自动选择.可选值: <code>1:1</code>, <code>16:9</code>, <code>4:3</code>, <code>3:2</code>, <code>2:3</code>, <code>3:4</code>, <code>9:16</code>, <code>21:9</code>
                     </p>
                 </td>
             </tr>

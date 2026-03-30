@@ -184,7 +184,95 @@ def _read_cfg_params(cfg: dict) -> dict:
         "typo_injection": cfg.get("typo_injection", False),
         "typo_density": cfg.get("typo_density", 0.8),
         "category_balance_threshold": cfg.get("category_balance_threshold", 0.6),
+
+        "image_gen_enabled": cfg.get("image_gen_enabled", False),
+        "minimax_api_key": cfg.get("minimax_api_key", ""),
+        "image_gen_model": cfg.get("image_gen_model", "image-01"),
+        "image_gen_max_per_article": cfg.get("image_gen_max_per_article", 3),
+        "image_gen_prompt_template": cfg.get("image_gen_prompt_template", ""),
+        "image_gen_aspect_ratios": cfg.get("image_gen_aspect_ratios", "16:9,4:3,1:1"),
     }
+
+
+def _generate_and_insert_images(
+    title: str,
+    html_content: str,
+    params: dict,
+) -> str:
+    """根据配置生成配图并插入到文章 HTML 中.
+
+    图片插入策略:
+    - 第一张图: 在第一个 <h2> 标签之后(作为封面图)
+    - 后续图: 在后续 <h2> 标签之间均匀分布
+    """
+    if not params.get("image_gen_enabled"):
+        return html_content
+    if not params.get("minimax_api_key"):
+        return html_content
+
+    try:
+        from image_gen import generate_and_upload_images
+        images = generate_and_upload_images(title, html_content, params)
+    except Exception as e:
+        print(f"  图片生成失败(不影响文章): {e}")
+        return html_content
+
+    if not images:
+        return html_content
+
+    print(f"  成功生成 {len(images)} 张配图,正在插入...")
+
+    cover_img = images[0]
+    inline_imgs = images[1:] if len(images) > 1 else []
+
+    # 构建图片 HTML
+    def _img_tag(img: dict) -> str:
+        att_id = img.get("attachment_id", "")
+        cls = "wp-block-image size-large"
+        wp_cls = f'wp-image-{att_id}' if att_id else ""
+        class_attr = f' class="{wp_cls}"' if wp_cls else ""
+        return (
+            f'<figure class="{cls}">'
+            f'<img src="{img["url"]}" alt="{img["alt_text"]}"{class_attr}/>'
+            f'</figure>'
+        )
+
+    # 插入封面图: 在第一个 <h2> 之后
+    if cover_img:
+        tag = _img_tag(cover_img)
+        h2_match = re.search(r"(<h2[^>]*>.*?</h2>)", html_content, re.DOTALL)
+        if h2_match:
+            pos = h2_match.end()
+            html_content = html_content[:pos] + "\n" + tag + "\n" + html_content[pos:]
+        else:
+            html_content = tag + "\n" + html_content
+
+    # 插入内联图片: 在后续 <h2> 标签之后均匀分布
+    if inline_imgs:
+        h2_positions = [m.end() for m in re.finditer(r"<h2[^>]*>.*?</h2>", html_content, re.DOTALL)]
+        if len(h2_positions) > 1:
+            # 从第二个 h2 开始,每隔一个插一张
+            step = max(1, (len(h2_positions) - 1) // len(inline_imgs))
+            inserted = 0
+            for i, img in enumerate(inline_imgs):
+                target_idx = 1 + i * step
+                if target_idx < len(h2_positions):
+                    tag = _img_tag(img)
+                    # 需要重新计算位置(因为前面插入改变了偏移)
+                    # 简化方案:从后往前插
+                    pass
+
+            # 从后往前插入避免偏移问题
+            insertions = []
+            for i, img in enumerate(inline_imgs):
+                target_idx = 1 + i * step
+                if target_idx < len(h2_positions):
+                    insertions.append((h2_positions[target_idx], _img_tag(img)))
+
+            for pos, tag in reversed(insertions):
+                html_content = html_content[:pos] + "\n" + tag + "\n" + html_content[pos:]
+
+    return html_content
 
 
 def _random_past_date(max_offset_days: int = 90) -> str:
@@ -422,6 +510,9 @@ def process_one_job(job: dict, categories: list[dict], cfg: dict):
         if quality_attempt < params["max_quality_retries"]:
             print(f"  重新生成文章...")
 
+    # 图像生成(在质量检查之后)
+    html_content = _generate_and_insert_images(title, html_content, params)
+
     slug = ""
     for slug_attempt in range(1, params["max_slug_retries"] + 1):
         slug = generate_english_slug(title, topic, slug_prompt=params["slug_prompt"])
@@ -616,6 +707,9 @@ def autonomous_run(count: int = 1):
 
         if not title:
             continue
+
+        # 图像生成(在质量检查之后,标题重复检查之前)
+        html_content = _generate_and_insert_images(title, html_content, params)
 
         if is_duplicate_title(title, existing_titles, threshold=params["title_threshold"]):
             print(f"  标题重复! '{title}' 与已有文章相似度过高")

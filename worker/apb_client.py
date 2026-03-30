@@ -106,3 +106,27 @@ def fetch_category_distribution() -> dict[int, int]:
         except Exception:
             pass
     return stats
+
+
+def upload_image(image_data: str, filename: str = "apb-image.png",
+                 alt_text: str = "", post_id: int = 0) -> dict:
+    """上传 base64 编码的图片到 WordPress 媒体库.
+
+    Args:
+        image_data: base64 编码的图片数据.
+        filename: 保存到媒体库的文件名.
+        alt_text: 图片 alt 文本.
+        post_id: 关联的文章 ID (0 表示不关联).
+
+    Returns:
+        {"attachment_id": int, "url": str}
+    """
+    body: dict = {
+        "image_data": image_data,
+        "filename": filename,
+    }
+    if alt_text:
+        body["alt_text"] = alt_text
+    if post_id:
+        body["post_id"] = post_id
+    return apb_post("/upload-image", body)

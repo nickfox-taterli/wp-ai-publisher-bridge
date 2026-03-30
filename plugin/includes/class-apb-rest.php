@@ -72,6 +72,12 @@ class APB_REST {
                 ),
             ),
         ) );
+
+        register_rest_route( $ns, '/upload-image', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'upload_image' ),
+            'permission_callback' => array( $this, 'check_token' ),
+        ) );
     }
 
     public function check_token( WP_REST_Request $request ): WP_Error|bool {
@@ -163,6 +169,13 @@ class APB_REST {
             'typo_density'                => (float) ( $settings['typo_density'] ?? 0.8 ),
             'max_article_words'           => (int) ( $settings['max_article_words'] ?? 2500 ),
             'category_balance_threshold'  => (float) ( $settings['category_balance_threshold'] ?? 0.6 ),
+
+            'image_gen_enabled'           => (bool) ( $settings['image_gen_enabled'] ?? false ),
+            'minimax_api_key'             => $settings['minimax_api_key'] ?? '',
+            'image_gen_model'             => $settings['image_gen_model'] ?? 'image-01',
+            'image_gen_max_per_article'   => (int) ( $settings['image_gen_max_per_article'] ?? 3 ),
+            'image_gen_prompt_template'   => $settings['image_gen_prompt_template'] ?? '',
+            'image_gen_aspect_ratios'     => $settings['image_gen_aspect_ratios'] ?? '16:9,4:3,1:1',
         );
 
         return $this->ok( $safe );
@@ -333,6 +346,61 @@ class APB_REST {
 
         $job = $this->repo->get( $id );
         return $this->ok( $job, 'Job marked as failed.' );
+    }
+
+    public function upload_image( WP_REST_Request $request ): WP_REST_Response {
+        $body = $request->get_json_params();
+        if ( empty( $body ) ) {
+            $body = $request->get_body_params();
+        }
+
+        $image_data = $body['image_data'] ?? '';
+        $filename   = sanitize_text_field( $body['filename'] ?? 'apb-image.png' );
+        $alt_text   = sanitize_text_field( $body['alt_text'] ?? '' );
+        $post_id    = absint( $body['post_id'] ?? 0 );
+
+        if ( empty( $image_data ) ) {
+            return $this->fail_response( 'image_data is required.', 400 );
+        }
+
+        $decoded = base64_decode( $image_data, true );
+        if ( $decoded === false || strlen( $decoded ) < 100 ) {
+            return $this->fail_response( 'Invalid base64 image data.', 400 );
+        }
+
+        if ( strlen( $decoded ) > 10 * 1024 * 1024 ) {
+            return $this->fail_response( 'Image exceeds 10MB limit.', 400 );
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+
+        $tmp_file = wp_tempnam( $filename );
+        file_put_contents( $tmp_file, $decoded );
+
+        $file_array = array(
+            'name'     => $filename,
+            'tmp_name' => $tmp_file,
+        );
+
+        $attach_id = media_handle_sideload( $file_array, $post_id );
+
+        if ( is_wp_error( $attach_id ) ) {
+            @unlink( $tmp_file );
+            return $this->fail_response( 'Upload failed: ' . $attach_id->get_error_message(), 500 );
+        }
+
+        if ( ! empty( $alt_text ) ) {
+            update_post_meta( $attach_id, '_wp_attachment_image_alt', $alt_text );
+        }
+
+        $url = wp_get_attachment_url( $attach_id );
+
+        return $this->ok( array(
+            'attachment_id' => (int) $attach_id,
+            'url'           => $url,
+        ), 'Image uploaded.' );
     }
 
     private function get_setting( string $key ) {

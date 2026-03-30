@@ -109,6 +109,15 @@ class APB_Admin {
         $clean['typo_density']                 = ( $typo_density > 0 && $typo_density <= 10 ) ? $typo_density : 0.8;
         $clean['max_article_words']            = max( 500, absint( $input['max_article_words'] ?? 2500 ) );
 
+        // 图像生成设置
+        $clean['image_gen_enabled']            = ! empty( $input['image_gen_enabled'] ) ? '1' : '0';
+        $clean['minimax_api_key']              = sanitize_text_field( $input['minimax_api_key'] ?? '' );
+        $clean['image_gen_model']              = in_array( $input['image_gen_model'] ?? '', array( 'image-01', 'image-01-live' ), true )
+                                                 ? $input['image_gen_model'] : 'image-01';
+        $clean['image_gen_max_per_article']    = max( 1, min( 10, absint( $input['image_gen_max_per_article'] ?? 3 ) ) );
+        $clean['image_gen_prompt_template']    = sanitize_textarea_field( $input['image_gen_prompt_template'] ?? '' );
+        $clean['image_gen_aspect_ratios']      = sanitize_text_field( $input['image_gen_aspect_ratios'] ?? '16:9,4:3,1:1' );
+
         return $clean;
     }
 
