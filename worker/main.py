@@ -239,15 +239,63 @@ def _resolve_category(
             category_prompt = cat.get("prompt_append") or None
             category_system_prompt = cat.get("system_prompt") or None
     elif categories:
+        # Step 1: 尝试将 AI 建议的分类名匹配到分类 ID
+        suggested_cat_id = None
+        suggested_cat = None
         if suggested_cat_name:
             for c in categories:
                 cn = c["name"].strip()
                 sc = suggested_cat_name.strip()
                 if cn == sc or cn in sc or sc in cn:
-                    cat_id = c["id"]
+                    suggested_cat_id = c["id"]
+                    suggested_cat = c
                     break
-        if not cat_id:
+
+        if suggested_cat_name and suggested_cat_id:
+            # Step 2: 快速检查主题文本是否包含建议分类的关键词
+            # 如果主题本身提到了建议分类的核心概念,直接信任 AI 建议
+            topic_text = f"{topic} {keywords}".lower()
+            suggestion_is_relevant = False
+
+            # 2a: 从分类名中提取核心词 (去掉 "开发"/"技术" 等通用后缀)
+            cat_core = suggested_cat_name.strip()
+            for suffix in ("开发", "技术", "教程", "实践", "研究", "入门", "进阶"):
+                if cat_core.endswith(suffix):
+                    cat_core = cat_core[: -len(suffix)]
+            cat_core = cat_core.strip().lower()
+            if cat_core and cat_core in topic_text:
+                suggestion_is_relevant = True
+
+            # 2b: 检查分类配置的 topic_keywords 是否命中
+            if not suggestion_is_relevant and suggested_cat:
+                kw_text = (suggested_cat.get("topic_keywords") or "").strip()
+                if kw_text:
+                    cat_kws = [k.strip().lower() for k in kw_text.split(",") if k.strip()]
+                    if any(kw in topic_text for kw in cat_kws):
+                        suggestion_is_relevant = True
+
+            if suggestion_is_relevant:
+                # 主题与建议分类相关,直接信任
+                cat_id = suggested_cat_id
+            else:
+                # 主题与建议分类无明显关联,用 AI 交叉验证
+                verified_id = classify_category(topic, keywords, categories)
+                if verified_id:
+                    if verified_id != suggested_cat_id:
+                        verified_name = next(
+                            (c["name"] for c in categories if c["id"] == verified_id), "?"
+                        )
+                        print(
+                            f"  ⚠ 选题建议分类 '{suggested_cat_name}' 与实际内容不符,"
+                            f"AI 验证修正为 '{verified_name}'"
+                        )
+                    cat_id = verified_id
+                else:
+                    cat_id = suggested_cat_id
+        else:
+            # 无建议或建议名无法匹配,直接分类
             cat_id = classify_category(topic, keywords, categories)
+
         if cat_id:
             cat = next((c for c in categories if c["id"] == cat_id), None)
             category_name = cat["name"] if cat else "默认分类"
@@ -263,55 +311,46 @@ def _resolve_category(
     return cat_id, category_name, category_prompt, category_system_prompt
 
 
-def balance_category(
-    chosen_cat_id: int | None,
+def _filter_balanced_categories(
     categories: list[dict],
     cat_stats: dict[int, int],
     threshold: float = 0.6,
-) -> int | None:
-    """检查分类占比,若超过阈值则切换到占比最小的分类.
+) -> list[dict]:
+    """过滤掉占比过高的分类,只返回欠represented的分类供 AI 选题.
+
+    这样 AI 生成的话题自然匹配最终分类,避免「事后换分类导致内容不匹配」的问题.
+    如果所有分类都超阈值或过滤后无可用分类,返回原始列表.
 
     Args:
-        chosen_cat_id: AI/任务指定的分类 ID.
-        categories: 可用分类列表.
+        categories: 所有可用分类.
         cat_stats: {category_id: count} 已发布文章的分类统计.
-        threshold: 单分类占比上限(默认 0.6, 即 60%).设为 0 或 1 可禁用.
+        threshold: 单分类占比上限(默认 0.6).
 
     Returns:
-        平衡后的分类 ID(可能与输入不同).
+        过滤后的分类列表.
     """
-    if not chosen_cat_id or not cat_stats or len(categories) < 2:
-        return chosen_cat_id
-
-    # 阈值为 0 或 >= 1 视为禁用
+    if not cat_stats or len(categories) < 2:
+        return categories
     if threshold <= 0 or threshold >= 1:
-        return chosen_cat_id
+        return categories
 
     total = sum(cat_stats.values())
     if total == 0:
-        return chosen_cat_id
+        return categories
 
-    chosen_count = cat_stats.get(chosen_cat_id, 0)
-    chosen_ratio = chosen_count / total
+    allowed = [c for c in categories if cat_stats.get(c["id"], 0) / total < threshold]
 
-    if chosen_ratio < threshold:
-        return chosen_cat_id
+    if not allowed:
+        # 所有分类都超阈值,选占比最低的几个
+        sorted_cats = sorted(categories, key=lambda c: cat_stats.get(c["id"], 0))
+        allowed = sorted_cats[:max(1, len(sorted_cats) // 2)]
 
-    # 占比超过阈值,切换到占比最小的分类
-    old_name = next((c["name"] for c in categories if c["id"] == chosen_cat_id), "?")
-    valid_cats = [c for c in categories if c["id"] != chosen_cat_id]
-    if not valid_cats:
-        return chosen_cat_id
+    if len(allowed) < len(categories):
+        excluded = [c["name"] for c in categories if c not in allowed]
+        print(f"  ⚖ 分类均衡: 暂时排除过度集中的分类 {excluded},"
+              f"要求 AI 从 {[c['name'] for c in allowed]} 中选题")
 
-    # 选文章数最少的分类;若相同则随机选一个
-    min_count = min(cat_stats.get(c["id"], 0) for c in valid_cats)
-    candidates = [c for c in valid_cats if cat_stats.get(c["id"], 0) == min_count]
-    chosen = random.choice(candidates)
-
-    print(f"  ⚖ 分类均衡: 「{old_name}」占比 {chosen_ratio:.0%} 超过阈值 {threshold:.0%},"
-          f"切换到「{chosen['name']}」(现有 {min_count} 篇)")
-
-    return chosen["id"]
+    return allowed
 
 
 def process_one_job(job: dict, categories: list[dict], cfg: dict):
@@ -340,23 +379,6 @@ def process_one_job(job: dict, categories: list[dict], cfg: dict):
     )
     if cat_id:
         final_cat_id = cat_id
-
-    # 分类均衡: 检查历史文章分布,避免分类扎堆
-    try:
-        cat_stats = fetch_category_distribution()
-        balanced_id = balance_category(
-            final_cat_id, categories, cat_stats,
-            threshold=params["category_balance_threshold"],
-        )
-        if balanced_id and balanced_id != final_cat_id:
-            final_cat_id = balanced_id
-            cat = next((c for c in categories if c["id"] == final_cat_id), None)
-            if cat:
-                category_name = cat["name"]
-                category_prompt = cat.get("prompt_append") or None
-                category_system_prompt = cat.get("system_prompt") or None
-    except Exception as e:
-        print(f"  ⚠ 分类均衡检查失败(不影响后续流程): {e}")
 
     # 生成文章(含质量重试)
     title = ""
@@ -498,8 +520,13 @@ def autonomous_run(count: int = 1):
 
         topic_data = None
         try:
+            # 分类均衡: 在选题前过滤掉过度集中的分类
+            allowed_categories = _filter_balanced_categories(
+                categories, cat_stats,
+                threshold=params["category_balance_threshold"],
+            )
             topic_data = ai_generate_topic(
-                categories=categories,
+                categories=allowed_categories,
                 existing_titles=existing_titles,
                 site_tone=cfg.get("site_tone", ""),
                 topic_system_prompt=params["topic_system_prompt"],
@@ -538,20 +565,6 @@ def autonomous_run(count: int = 1):
             topic, keywords, categories,
             suggested_cat_name=suggested_cat_name,
         )
-
-        # 分类均衡: 检查历史分布,避免扎堆
-        if cat_id:
-            balanced_id = balance_category(
-                cat_id, categories, cat_stats,
-                threshold=params["category_balance_threshold"],
-            )
-            if balanced_id and balanced_id != cat_id:
-                cat_id = balanced_id
-                cat = next((c for c in categories if c["id"] == cat_id), None)
-                if cat:
-                    category_name = cat["name"]
-                    category_prompt = cat.get("prompt_append") or None
-                    category_system_prompt = cat.get("system_prompt") or None
 
         title = ""
         html_content = ""
