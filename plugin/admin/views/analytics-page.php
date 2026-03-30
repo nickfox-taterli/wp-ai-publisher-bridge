@@ -72,12 +72,17 @@ $range_labels = array(
     </div>
 
     <?php if ( $summary->total_calls == 0 ) : ?>
-    <!-- 无数据状态 -->
-    <div class="apb-empty-state">
-        <div class="apb-empty-icon">📊</div>
+    <!-- 无数据状态 - 显示错误提示 -->
+    <div class="apb-empty-state apb-empty-error">
+        <div class="apb-empty-icon">⚠️</div>
         <h2>暂无 AI 用量数据</h2>
-        <p>Worker 完成任务后会自动回报 Token 用量、延迟等指标。</p>
-        <p class="apb-empty-hint">确保 Worker 版本支持用量回报功能。</p>
+        <p>在所选时间范围内未找到任何 AI 用量记录。Worker 完成任务后会自动回报 Token 用量、延迟等指标。</p>
+        <p class="apb-empty-hint">请检查以下项目：</p>
+        <ul class="apb-error-list">
+            <li>确保 Worker 正在运行且版本支持用量回报功能</li>
+            <li>确认 Worker 已成功连接到本站点</li>
+            <li>尝试切换时间范围查看其他时段的数据</li>
+        </ul>
     </div>
     <?php else : ?>
 
@@ -361,7 +366,6 @@ document.addEventListener('DOMContentLoaded', function() {
         background: #fff;
         color: #6b7280;
         border: 1px solid #e5e7eb;
-        transition: all 0.2s;
     }
 
     .apb-range-btn:hover {
@@ -391,11 +395,9 @@ document.addEventListener('DOMContentLoaded', function() {
         padding: 24px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         border: 1px solid #e5e7eb;
-        transition: transform 0.2s, box-shadow 0.2s;
     }
 
     .apb-metric-card:hover {
-        transform: translateY(-2px);
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
 
@@ -532,37 +534,57 @@ document.addEventListener('DOMContentLoaded', function() {
         font-size: 13px;
     }
 
-    /* 空状态 */
+    /* 空状态 - 错误提示样式 */
     .apb-empty-state {
-        background: #fff;
         border-radius: 12px;
-        padding: 60px 20px;
+        padding: 50px 30px;
         text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        border: 1px solid #e5e7eb;
+    }
+
+    .apb-empty-state.apb-empty-error {
+        background: #fef2f2;
+        border: 2px solid #fca5a5;
+        box-shadow: 0 2px 12px rgba(239, 68, 68, 0.1);
     }
 
     .apb-empty-icon {
-        font-size: 64px;
-        margin-bottom: 20px;
+        font-size: 56px;
+        margin-bottom: 16px;
     }
 
     .apb-empty-state h2 {
         font-size: 20px;
-        color: #1f2937;
-        margin: 0 0 10px 0;
+        color: #991b1b;
+        margin: 0 0 12px 0;
     }
 
     .apb-empty-state p {
         font-size: 14px;
-        color: #6b7280;
-        margin: 0 0 5px 0;
+        color: #7f1d1d;
+        margin: 0 0 6px 0;
     }
 
     .apb-empty-hint {
+        font-size: 14px;
+        color: #b91c1c;
+        font-weight: 600;
+        margin-top: 14px !important;
+        margin-bottom: 8px !important;
+    }
+
+    .apb-error-list {
+        display: inline-block;
+        text-align: left;
+        list-style: disc;
+        margin: 10px 0 0 0;
+        padding-left: 22px;
+    }
+
+    .apb-error-list li {
         font-size: 13px;
-        color: #9ca3af;
-        margin-top: 10px !important;
+        color: #7f1d1d;
+        margin-bottom: 6px;
+        line-height: 1.5;
     }
 
     @media (max-width: 782px) {
