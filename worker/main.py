@@ -124,7 +124,7 @@ def _generate_for_topic(
 
 def _extract_title_keywords(title: str) -> set[str]:
     t = re.sub(r'[的了吗呢了吧和与从到在是有]', ' ', title)
-    t = re.sub(r'[::,,.??!!--\-·「」[]()()\[\]""'']', ' ', t)
+    t = re.sub(r'[::,,.??!!\-\-·「」\[\]\(\)（）\u201c\u201d\u2018\u2019]', ' ', t)
     return {m.group().lower() for m in re.finditer(r'[\u4e00-\u9fff]{2,}|[a-zA-Z0-9_]+', t)}
 
 
