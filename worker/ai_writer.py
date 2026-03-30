@@ -1,4 +1,4 @@
-﻿"""AI 内容生成 - 文章,JSON 解析,分类选择"""
+"""AI 内容生成 - 文章,JSON 解析,分类选择"""
 
 import html as html_lib
 import json
@@ -14,6 +14,7 @@ from humanizer import (
     inject_typos,
     randomize_punctuation,
 )
+from usage_tracker import timed_call, track as _track_usage
 
 
 _FALLBACK_SYSTEM_PROMPT = textwrap.dedent("""\
@@ -222,18 +223,22 @@ def generate_english_slug(
     slug_prompt: str | None = None,
 ) -> str:
     sys_prompt = slug_prompt or _FALLBACK_SLUG_PROMPT
+    user_prompt = f"Title: {title}\nTopic: {topic}"
     try:
-        resp = _config.ai_client.chat.completions.create(
-            model=_config.AI_MODEL,
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": f"Title: {title}\nTopic: {topic}"},
-            ],
-            max_tokens=1024,
-            extra_body={"reasoning_split": True},
-        )
+        with timed_call() as t:
+            resp = _config.ai_client.chat.completions.create(
+                model=_config.AI_MODEL,
+                messages=[
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=1024,
+                extra_body={"reasoning_split": True},
+            )
         msg = resp.choices[0].message
         raw = (msg.content or "").strip().lower()
+
+        _track_usage("slug", _config.AI_MODEL, sys_prompt + user_prompt, raw, t.ms)
 
         if not raw:
             return ""
@@ -556,13 +561,15 @@ def classify_category(topic: str, keywords: str, categories: list[dict]) -> int 
         f"只回复分类ID,不要任何其他内容."
     )
 
-    resp = _config.ai_client.chat.completions.create(
-        model=_config.AI_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=256,
-        extra_body={"reasoning_split": True},
-    )
+    with timed_call() as t:
+        resp = _config.ai_client.chat.completions.create(
+            model=_config.AI_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=256,
+            extra_body={"reasoning_split": True},
+        )
     text = _extract_response_text(resp)
+    _track_usage("classify", _config.AI_MODEL, prompt, text, t.ms)
     cat_id = _extract_category_id(text)
     if cat_id is not None:
         return cat_id
@@ -610,17 +617,19 @@ def generate_article(
 
     prompt += _random_structure_hint()
 
-    resp = _config.ai_client.chat.completions.create(
-        model=_config.AI_MODEL,
-        messages=[
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=max_tokens,
-        extra_body={"reasoning_split": True},
-    )
+    with timed_call() as t:
+        resp = _config.ai_client.chat.completions.create(
+            model=_config.AI_MODEL,
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=max_tokens,
+            extra_body={"reasoning_split": True},
+        )
 
     raw = _extract_response_text(resp)
+    _track_usage("article", _config.AI_MODEL, sys_prompt + prompt, raw, t.ms)
     data = extract_json_object(raw)
 
     if data and isinstance(data, dict) and data.get("content"):
@@ -758,17 +767,19 @@ def generate_kernel_article(
     if persona_enabled:
         sys_prompt += _maybe_persona()
 
-    resp = _config.ai_client.chat.completions.create(
-        model=_config.AI_MODEL,
-        messages=[
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=max_tokens,
-        extra_body={"reasoning_split": True},
-    )
+    with timed_call() as t:
+        resp = _config.ai_client.chat.completions.create(
+            model=_config.AI_MODEL,
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=max_tokens,
+            extra_body={"reasoning_split": True},
+        )
 
     raw = _extract_response_text(resp)
+    _track_usage("kernel_article", _config.AI_MODEL, sys_prompt + prompt, raw, t.ms)
     data = extract_json_object(raw)
 
     if data and isinstance(data, dict) and data.get("content"):
@@ -843,16 +854,18 @@ def ai_generate_topic(
     )
 
     try:
-        resp = _config.ai_client.chat.completions.create(
-            model=_config.AI_MODEL,
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=max_tokens,
-            extra_body={"reasoning_split": True},
-        )
+        with timed_call() as t:
+            resp = _config.ai_client.chat.completions.create(
+                model=_config.AI_MODEL,
+                messages=[
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=max_tokens,
+                extra_body={"reasoning_split": True},
+            )
         raw = _extract_response_text(resp)
+        _track_usage("topic", _config.AI_MODEL, sys_prompt + prompt, raw, t.ms)
         data = extract_json_object(raw)
         if not data:
             print(f"  ⚠ AI 选题 JSON 解析失败, 原始回复前120字: {raw[:120]}...")

@@ -7,6 +7,7 @@ class APB_Activator {
 
     public static function activate(): void {
         self::create_table();
+        self::create_usage_table();
         self::migrate_table();
         self::set_default_options();
     }
@@ -36,6 +37,34 @@ class APB_Activator {
             PRIMARY KEY  (id),
             KEY idx_status (status),
             KEY idx_created (created_at)
+        ) {$charset};";
+
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        dbDelta( $sql );
+    }
+
+    private static function create_usage_table(): void {
+        global $wpdb;
+
+        $table   = $wpdb->prefix . APB_TABLE_USAGE;
+        $charset = $wpdb->get_charset_collate();
+
+        $sql = "CREATE TABLE {$table} (
+            id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            job_id            BIGINT UNSIGNED NULL,
+            call_type         VARCHAR(32) NOT NULL DEFAULT 'article',
+            model             VARCHAR(64) NOT NULL DEFAULT '',
+            prompt_tokens     INT UNSIGNED NOT NULL DEFAULT 0,
+            completion_tokens INT UNSIGNED NOT NULL DEFAULT 0,
+            total_tokens      INT UNSIGNED NOT NULL DEFAULT 0,
+            latency_ms        INT UNSIGNED NOT NULL DEFAULT 0,
+            tps               DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            extra             LONGTEXT NULL,
+            created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY idx_job (job_id),
+            KEY idx_created (created_at),
+            KEY idx_call_type (call_type)
         ) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';

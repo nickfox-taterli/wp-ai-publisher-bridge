@@ -57,6 +57,15 @@ class APB_Admin {
             'apb-api-docs',
             array( $this, 'render_api_docs_page' )
         );
+
+        add_submenu_page(
+            'ai-publisher-bridge',
+            'AI 用量',
+            'AI 用量',
+            'manage_options',
+            'apb-analytics',
+            array( $this, 'render_analytics_page' )
+        );
     }
 
     public function register_settings(): void {
@@ -305,5 +314,12 @@ class APB_Admin {
             return;
         }
         include APB_PLUGIN_DIR . 'admin/views/api-docs-page.php';
+    }
+
+    public function render_analytics_page(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        include APB_PLUGIN_DIR . 'admin/views/analytics-page.php';
     }
 }

@@ -1,4 +1,4 @@
-﻿"""自主模式: 自动选题,生成文章,发布到 WordPress"""
+"""自主模式: 自动选题,生成文章,发布到 WordPress"""
 
 import argparse
 import html as html_lib
@@ -42,6 +42,7 @@ from topic_profiles import (
     load_profiles,
 )
 import config as _config
+from usage_tracker import collect as _collect_usage, reset as _reset_usage
 
 
 def _generate_for_topic(
@@ -447,6 +448,7 @@ def process_one_job(job: dict, categories: list[dict], cfg: dict):
     keywords = job.get("keywords", "")
     site_profile = job.get("site_profile", "")
 
+    _reset_usage()
     params = _read_cfg_params(cfg)
 
     print(f"\n{'=' * 60}")
@@ -534,8 +536,13 @@ def process_one_job(job: dict, categories: list[dict], cfg: dict):
         print(f"  随机发布时间: {post_date}")
 
     try:
+        usage = _collect_usage()
+        if usage:
+            total_tokens = sum(u["total_tokens"] for u in usage)
+            print(f"  用量统计: {len(usage)} 次 API 调用, ~{total_tokens} tokens")
         result = complete_job(job_id, title, html_content, excerpt, post_slug=slug,
-                              category_id=final_cat_id or None, post_date=post_date)
+                              category_id=final_cat_id or None, post_date=post_date,
+                              usage=usage or None)
         status = result.get("data", {}).get("status", "unknown")
         wp_id = result.get("data", {}).get("wp_post_id")
         print(f"  任务完成! 状态: {status}, WordPress 文章 ID: {wp_id}")
@@ -609,6 +616,7 @@ def autonomous_run(count: int = 1):
         attempts += 1
         print(f"\n--- 第 {attempts} 次尝试 (已发布 {published_count}/{count}) ---")
 
+        _reset_usage()
         topic_data = None
         try:
             # 分类均衡: 在选题前过滤掉过度集中的分类
@@ -740,8 +748,13 @@ def autonomous_run(count: int = 1):
             print(f"  随机发布时间: {post_date}")
 
         try:
+            usage = _collect_usage()
+            if usage:
+                total_tokens = sum(u["total_tokens"] for u in usage)
+                print(f"  用量统计: {len(usage)} 次 API 调用, ~{total_tokens} tokens")
             result = complete_job(job_id, title, html_content, excerpt, post_slug=slug,
-                                  category_id=cat_id, post_date=post_date)
+                                  category_id=cat_id, post_date=post_date,
+                                  usage=usage or None)
             status = result.get("data", {}).get("status", "unknown")
             wp_id = result.get("data", {}).get("wp_post_id")
             print(f"  发布成功! 状态: {status}, WP ID: {wp_id}")

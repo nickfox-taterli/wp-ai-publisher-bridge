@@ -52,7 +52,7 @@ def claim_job(job_id: str) -> dict:
 
 def complete_job(job_id: str, title: str, html_content: str, excerpt: str = "",
                  post_slug: str = "", category_id: int | None = None,
-                 post_date: str | None = None):
+                 post_date: str | None = None, usage: list[dict] | None = None):
     body = {
         "generated_title": title,
         "generated_html": html_content,
@@ -65,6 +65,8 @@ def complete_job(job_id: str, title: str, html_content: str, excerpt: str = "",
         body["category_id"] = category_id
     if post_date:
         body["post_date"] = post_date
+    if usage:
+        body["usage"] = usage
     return apb_post(f"/jobs/{job_id}/complete", body)
 
 

@@ -7,10 +7,12 @@ class APB_REST {
 
     private APB_Job_Repository $repo;
     private APB_Post_Publisher $publisher;
+    private APB_Usage_Repository $usage_repo;
 
     public function __construct() {
-        $this->repo      = new APB_Job_Repository();
-        $this->publisher = new APB_Post_Publisher();
+        $this->repo        = new APB_Job_Repository();
+        $this->publisher   = new APB_Post_Publisher();
+        $this->usage_repo  = new APB_Usage_Repository();
     }
 
     public function register_routes(): void {
@@ -65,6 +67,17 @@ class APB_REST {
         register_rest_route( $ns, '/jobs/(?P<id>\d+)/fail', array(
             'methods'             => 'POST',
             'callback'            => array( $this, 'fail_job' ),
+            'permission_callback' => array( $this, 'check_token' ),
+            'args' => array(
+                'id' => array(
+                    'validate_callback' => function( $v ) { return is_numeric( $v ) && (int) $v > 0; },
+                ),
+            ),
+        ) );
+
+        register_rest_route( $ns, '/jobs/(?P<id>\d+)/usage', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'report_usage' ),
             'permission_callback' => array( $this, 'check_token' ),
             'args' => array(
                 'id' => array(
@@ -319,6 +332,12 @@ class APB_REST {
 
         $this->repo->update( $id, $update_data, $update_format );
 
+        // 记录 Worker 回报的 usage 数据
+        $usage_data = $body['usage'] ?? array();
+        if ( is_array( $usage_data ) && ! empty( $usage_data ) ) {
+            $this->save_usage_data( $id, $usage_data );
+        }
+
         $job = $this->repo->get( $id );
         return $this->ok( $job, 'Job completed and post created.' );
     }
@@ -346,6 +365,44 @@ class APB_REST {
 
         $job = $this->repo->get( $id );
         return $this->ok( $job, 'Job marked as failed.' );
+    }
+
+    /**
+     * 独立的用量上报端点 (失败的任务也可以回报用量)
+     */
+    public function report_usage( WP_REST_Request $request ): WP_REST_Response {
+        $id = (int) $request['id'];
+
+        $job = $this->repo->get( $id );
+        if ( ! $job ) {
+            return $this->fail_response( 'Job not found.', 404 );
+        }
+
+        $body = $request->get_json_params();
+        if ( empty( $body ) ) {
+            $body = $request->get_body_params();
+        }
+
+        $usage_data = $body['usage'] ?? array();
+        if ( ! is_array( $usage_data ) || empty( $usage_data ) ) {
+            return $this->fail_response( 'usage array is required.', 400 );
+        }
+
+        $count = $this->save_usage_data( $id, $usage_data );
+
+        return $this->ok( array( 'logged' => $count ), 'Usage data recorded.' );
+    }
+
+    /**
+     * 保存 usage 数据到 apb_usage_logs 表
+     */
+    private function save_usage_data( int $job_id, array $usage_data ): int {
+        // 支持单条和多条两种格式
+        if ( isset( $usage_data['call_type'] ) ) {
+            $usage_data = array( $usage_data );
+        }
+
+        return $this->usage_repo->insert_batch( $job_id, $usage_data );
     }
 
     public function upload_image( WP_REST_Request $request ): WP_REST_Response {

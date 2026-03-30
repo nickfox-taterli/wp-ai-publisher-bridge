@@ -574,21 +574,55 @@ $base_url = rest_url( APB_REST_NAMESPACE );
             <span class="apb-doc-icon">🔄</span>
             <h2>任务状态流转</h2>
         </div>
-        <pre style="background: #f5f5f5; padding: 15px; overflow-x: auto;"><code>┌─────────┐    claim     ┌─────────────┐   complete   ┌───────────┐
-│ pending │ ───────────► │ processing  │ ───────────► │ completed │
-│ (待处理) │              │  (处理中)    │              │  (已完成)  │
-└─────────┘              └─────────────┘              └─────┬─────┘
-      │                           │                         │
-      │                           │ fail                    │ publish
-      │                           ▼                         ▼
-      │                    ┌─────────┐               ┌───────────┐
-      └──────────────────► │ failed  │               │ published │
-        (reset)            │ (失败)   │               │  (已发布)  │
-                           └────┬────┘               └───────────┘
-                                │
-                                ▼
-                           (pending)
-                           重置后重新处理</code></pre>
+        <div class="apb-flow">
+            <div class="apb-flow-row">
+                <div class="apb-flow-node apb-flow-pending">
+                    <span class="apb-flow-label">pending</span>
+                    <span class="apb-flow-desc">待处理</span>
+                </div>
+                <div class="apb-flow-arrow">
+                    <span class="apb-flow-action">claim</span>
+                    <svg viewBox="0 0 60 20" width="60" height="20"><path d="M0 10 L50 10" stroke="#94a3b8" stroke-width="2" fill="none"/><path d="M46 5 L54 10 L46 15" fill="#94a3b8"/></svg>
+                </div>
+                <div class="apb-flow-node apb-flow-processing">
+                    <span class="apb-flow-label">processing</span>
+                    <span class="apb-flow-desc">处理中</span>
+                </div>
+                <div class="apb-flow-arrow">
+                    <span class="apb-flow-action">complete</span>
+                    <svg viewBox="0 0 60 20" width="60" height="20"><path d="M0 10 L50 10" stroke="#94a3b8" stroke-width="2" fill="none"/><path d="M46 5 L54 10 L46 15" fill="#94a3b8"/></svg>
+                </div>
+                <div class="apb-flow-node apb-flow-completed">
+                    <span class="apb-flow-label">completed</span>
+                    <span class="apb-flow-desc">已完成</span>
+                </div>
+                <div class="apb-flow-arrow">
+                    <span class="apb-flow-action">publish</span>
+                    <svg viewBox="0 0 60 20" width="60" height="20"><path d="M0 10 L50 10" stroke="#94a3b8" stroke-width="2" fill="none"/><path d="M46 5 L54 10 L46 15" fill="#94a3b8"/></svg>
+                </div>
+                <div class="apb-flow-node apb-flow-published">
+                    <span class="apb-flow-label">published</span>
+                    <span class="apb-flow-desc">已发布</span>
+                </div>
+            </div>
+            <div class="apb-flow-branches">
+                <div class="apb-flow-branch-item">
+                    <div class="apb-flow-branch-down" style="margin-left: calc(50% - 44px + 30px);">
+                        <span class="apb-flow-action apb-flow-action-danger">fail</span>
+                        <svg viewBox="0 0 20 40" width="20" height="40"><path d="M10 0 L10 30" stroke="#f87171" stroke-width="2" fill="none"/><path d="M5 27 L10 35 L15 27" fill="#f87171"/></svg>
+                    </div>
+                    <div class="apb-flow-node apb-flow-failed">
+                        <span class="apb-flow-label">failed</span>
+                        <span class="apb-flow-desc">失败</span>
+                    </div>
+                    <div class="apb-flow-branch-reset">
+                        <span class="apb-flow-action">reset</span>
+                        <svg viewBox="0 0 120 20" width="120" height="20"><path d="M110 10 L10 10" stroke="#94a3b8" stroke-width="2" fill="none" stroke-dasharray="4 3"/><path d="M14 5 L6 10 L14 15" fill="#94a3b8"/></svg>
+                        <span class="apb-flow-reset-hint">回到 pending 重新处理</span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <table class="widefat striped" style="margin-top: 15px;">
             <thead>
@@ -851,6 +885,103 @@ $base_url = rest_url( APB_REST_NAMESPACE );
             .apb-api-card .widefat {
                 font-size: 12px;
             }
+        }
+
+        /* ── 任务状态流转图 ── */
+        .apb-flow {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 28px 20px 24px;
+            overflow-x: auto;
+        }
+        .apb-flow-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            flex-wrap: nowrap;
+            min-width: max-content;
+        }
+        .apb-flow-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 10px 16px;
+            border-radius: 10px;
+            min-width: 88px;
+            border: 2px solid;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .apb-flow-node:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .apb-flow-label {
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .apb-flow-desc {
+            font-size: 11px;
+            opacity: 0.8;
+        }
+        /* 各状态颜色 */
+        .apb-flow-pending   { background: #eef2ff; border-color: #818cf8; color: #4338ca; }
+        .apb-flow-processing { background: #fffbeb; border-color: #fbbf24; color: #92400e; }
+        .apb-flow-completed { background: #ecfdf5; border-color: #34d399; color: #065f46; }
+        .apb-flow-published { background: #eff6ff; border-color: #60a5fa; color: #1e40af; }
+        .apb-flow-failed    { background: #fef2f2; border-color: #f87171; color: #991b1b; }
+
+        .apb-flow-arrow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            margin: 0 6px;
+        }
+        .apb-flow-action {
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748b;
+            background: #e2e8f0;
+            padding: 2px 8px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+        .apb-flow-action-danger {
+            background: #fecaca;
+            color: #b91c1c;
+        }
+        .apb-flow-branches {
+            margin-top: 8px;
+        }
+        .apb-flow-branch-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        .apb-flow-branch-down {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            position: relative;
+            left: 50%;
+            transform: translateX(-110px); /* 大致对齐 processing 节点中心 */
+        }
+        .apb-flow-branch-reset {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .apb-flow-reset-hint {
+            font-size: 11px;
+            color: #94a3b8;
+            white-space: nowrap;
         }
     </style>
 </div>
